@@ -1,0 +1,70 @@
+"""Transform Youth Access Legislation dataset."""
+
+import pyarrow as pa
+
+from subsets_utils import upload_data, publish, load_raw_json
+from ..utils import parse_date, COLUMN_DESC
+from .test import test
+
+DATASET_ID = "cdc_youth_access_legislation"
+SOURCE_ID = "hgv5-3wrn"
+
+METADATA = {
+    "id": DATASET_ID,
+    "title": "CDC Youth Access Legislation by State",
+    "description": (
+        "State-level youth tobacco access legislation from the State Tobacco Activities "
+        "Tracking and Evaluation (STATE) System. Tracks laws governing cigarette sales to minors, "
+        "vending machine restrictions, and related provisions. "
+        f"Source dataset ID: {SOURCE_ID}"
+    ),
+    "column_descriptions": {
+        "year": COLUMN_DESC["year"],
+        "quarter": COLUMN_DESC["quarter"],
+        "state_abbr": COLUMN_DESC["state_abbr"],
+        "state_name": COLUMN_DESC["state_name"],
+        "topic": COLUMN_DESC["topic"],
+        "measure": COLUMN_DESC["measure"],
+        "provision_group": COLUMN_DESC["provision_group"],
+        "provision": COLUMN_DESC["provision"],
+        "provision_value": COLUMN_DESC["provision_value"],
+        "citation": COLUMN_DESC["citation"],
+        "enacted_date": COLUMN_DESC["enacted_date"],
+        "effective_date": COLUMN_DESC["effective_date"],
+    },
+}
+
+
+def run():
+    """Transform, validate, and upload youth access legislation data."""
+    raw = load_raw_json(f"dataset_{SOURCE_ID}")
+    data = raw["data"]
+
+    records = []
+    for row in data:
+        records.append({
+            "year": row.get("year"),
+            "quarter": row.get("quarter"),
+            "state_abbr": row.get("locationabbr"),
+            "state_name": row.get("locationdesc"),
+            "topic": row.get("topicdesc"),
+            "measure": row.get("measuredesc"),
+            "provision_group": row.get("provisiongroupdesc"),
+            "provision": row.get("provisiondesc"),
+            "provision_value": row.get("provisionvalue"),
+            "citation": row.get("citation"),
+            "enacted_date": parse_date(row.get("enacted_date")),
+            "effective_date": parse_date(row.get("effective_date")),
+        })
+
+    table = pa.Table.from_pylist(records)
+    print(f"  Transformed {len(table):,} records")
+
+    test(table)
+    upload_data(table, DATASET_ID)
+    publish(DATASET_ID, METADATA)
+    print(f"  {DATASET_ID}: {len(table):,} rows published")
+
+
+if __name__ == "__main__":
+    run()
